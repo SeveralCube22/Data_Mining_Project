@@ -11,11 +11,14 @@ def get_keys():
         (key, value) = line.split(",")
         sensitive[key] = value
         
+def get_state_data():
+    pass
+        
 def login():
     username = driver.find_element(By.XPATH, "//*[@id='email-field']")
-    username.send_keys(sensitive["USERNAME"])
+    username.send_keys(sensitive["USERNAME"]) # username for solution explorer
     pswd = driver.find_element(By.XPATH, "//*[@id='passwordInput']")
-    pswd.send_keys(sensitive["PASSWORD"])
+    pswd.send_keys(sensitive["PASSWORD"]) # password for solution explorer
     wait_and_click("//*[@id='application']/div/div/div[3]/form/div[1]/button", click_btn)
 
 def click_btn(xpath):
@@ -51,7 +54,9 @@ def select_properties():
   
 sensitive = {}
 states = {} # parse HTML to get stateNums and stateNames for use in select_place function
+
 get_keys()
+get_state_data()
 
 sol_explore = "https://www.socialexplorer.com/explore-tables"
 driver = webdriver.Chrome(executable_path='C:/Users/manam/Desktop/chromedriver_win32/chromedriver.exe')
@@ -67,8 +72,9 @@ for i in range(11):
     child = driver.window_handles[1]      
     driver.switch_to.window(child) 
     
-    select_place() # pass state(other terrorties included) num 1-72 and state name
-    select_properties()
+    for (key, value) in states:
+        select_place(key, value) # pass state(other terrorties included) num 1-72 and state name
+        select_properties()
     
     driver.close()
     driver.switch_to.window(driver.window_handles[0])
