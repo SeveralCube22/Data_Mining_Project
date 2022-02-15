@@ -34,13 +34,13 @@ def select(xpath, value):
     selector = Select(driver.find_element(By.XPATH, xpath))
     selector.select_by_value(value)
     
-def select_place():
+def select_place(stateNum, stateName):
     xpath = "//*[@id='cmbGeoType']"
     wait_and_click(xpath, select, value="SL160") # select PLACE
     xpath = "//*[@id='geoCombosContainer']/div/select"
-    wait_and_click(xpath, select, value="06;160;California") # select State(CA)
+    wait_and_click(xpath, select, value="{};160;{}".format(stateNum, stateName)) # select state
     xpath = "//*[@id='listGeoItems']"
-    wait_and_click(xpath, select, value="06;160; ") # select all places(cities) in state
+    wait_and_click(xpath, select, value="{};160; ".format(stateNum)) # select all places(cities) in state
     
     click_btn("//*[@id='btnAddGeoItem']") # click add
     click_btn("//*[@id='btnGeoNext']") # click next
@@ -48,8 +48,9 @@ def select_place():
 def select_properties():
     pass
     
-    
+  
 sensitive = {}
+states = {} # parse HTML to get stateNums and stateNames for use in select_place function
 get_keys()
 
 sol_explore = "https://www.socialexplorer.com/explore-tables"
@@ -66,7 +67,7 @@ for i in range(11):
     child = driver.window_handles[1]      
     driver.switch_to.window(child) 
     
-    select_place()
+    select_place() # pass state(other terrorties included) num 1-72 and state name
     select_properties()
     
     driver.close()
