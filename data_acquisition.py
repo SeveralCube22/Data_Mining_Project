@@ -5,11 +5,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 
-def get_keys():
-    f = open("./sensitive.txt", "r")
-    for line in f:
-        (key, value) = line.split(",")
-        sensitive[key] = value
+import sensitive
         
 def get_state_data():
     pass
@@ -52,15 +48,13 @@ def select_properties():
     pass
     
   
-sensitive = {}
-states = {} # parse HTML to get stateNums and stateNames for use in select_place function
-
-get_keys()
-get_state_data()
+sensitive = sensitive.get_keys()
+states = get_state_data() # parse HTML to get stateNums and stateNames for use in select_place function
 
 sol_explore = "https://www.socialexplorer.com/explore-tables"
 driver = webdriver.Chrome(executable_path='C:/Users/manam/Desktop/chromedriver_win32/chromedriver.exe')
 driver.get(sol_explore)
+
 login()
 
 wait_and_click("//*[@id='dashboard']/div[5]/div/div/div[5]/div[1]/button", click_btn)
