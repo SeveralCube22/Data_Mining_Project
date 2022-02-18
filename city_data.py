@@ -1,3 +1,4 @@
+from asyncio import wait_for
 from multiprocessing.connection import wait
 from operator import truediv
 from selenium import webdriver
@@ -8,6 +9,7 @@ from selenium.webdriver.support.ui import Select
 from bs4 import BeautifulSoup
 from sensitive import get_keys
 
+import os.path
 import state
         
 def get_state_data():
@@ -52,15 +54,13 @@ def select_place(stateValue=None):
     wait_and_click(xpath, select, value="SL160") # select PLACE
     xpath = "//*[@id='geoCombosContainer']/div/select"
     wait_for_element(xpath)
-    print("OUTER")
+
     if(stateValue == None):
         global states
         states = get_state_data() # have to do this because HTML attributes doesn't show initially
         
     else:
-        print("PRINTING", stateValue)
         wait_and_click(xpath, select, value=stateValue) # select state
-        print("HERE")
         
         xpath = "//*[@id='listGeoItems']"
         values = stateValue.split(";")
@@ -75,18 +75,26 @@ def select_properties():
     select_xpath = "//*[@id='tableCombo']"
     wait_for_element(select_xpath)
     
-    print("PROPERTIES OPTIONS")
-    
     for prop in city_properties:
         for super in properties: # list of options
             if is_subset(super.text, prop):
-                print(super.text, prop)
                 wait_and_click(select_xpath, select, value=super["value"])
                 click_btn("//*[@id='btnAddTable']") # click add
                 break
             
     click_btn("//*[@id='btnTableNext']") # click next
+    wait_for_element("//*[@id='geoItemsPagerContainer']")
 
+def store_table_link(year, state, url):
+    fileName = "table_links.csv"
+    if(not os.path.exists(fileName)):
+        file = open(fileName, "a")
+        file.write("YEAR, STATE, URL\n")
+        file.close()
+        
+    file = open(fileName, "a")
+    file.write("{}, {}, {}\n".format(year, state, url))
+    
 def is_subset(super, sub):
     for word in sub:
         if word not in super:
@@ -104,6 +112,8 @@ def get_city_data():
         WebDriverWait(driver, 10).until(EC.number_of_windows_to_be(2))   
         child = driver.window_handles[1]      
         driver.switch_to.window(child)
+        curr_url= driver.current_url
+        
         if not init: 
             select_place()
             init = True
@@ -112,7 +122,9 @@ def get_city_data():
             if(key in state.scrape_states.keys()):
                 select_place(value) # pass state(other terrorties included) num 1-72 and state name
                 select_properties()
-
+                store_table_link(2019 - i, key, driver.current_url)
+                driver.get(curr_url)
+                     
         driver.close()
         driver.switch_to.window(driver.window_handles[0])
     

@@ -4,5 +4,4 @@ def get_keys():
     for line in f:
         (key, value) = line.split(",")
         sensitive[key] = value
-
-sensitive = get_keys()
+    return sensitive
