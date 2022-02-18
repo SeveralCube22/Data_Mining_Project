@@ -47,22 +47,24 @@ def select(xpath, value):
     selector = Select(driver.find_element(By.XPATH, xpath))
     selector.select_by_value(value)
     
-def select_place(stateName=None, stateNum=None):
+def select_place(stateValue=None):
     xpath = "//*[@id='cmbGeoType']"
     wait_and_click(xpath, select, value="SL160") # select PLACE
     xpath = "//*[@id='geoCombosContainer']/div/select"
     wait_for_element(xpath)
-    
-    if(stateName == None):
+    print("OUTER")
+    if(stateValue == None):
         global states
         states = get_state_data() # have to do this because HTML attributes doesn't show initially
+        
     else:
-        print("{};160;{}".format(stateNum, stateName))
-        wait_and_click(xpath, select, value="{};160;{}".format(stateNum, stateName)) # select state
+        print("PRINTING", stateValue)
+        wait_and_click(xpath, select, value=stateValue) # select state
         print("HERE")
         
         xpath = "//*[@id='listGeoItems']"
-        wait_and_click(xpath, select, value="{};160; ".format(stateNum)) # select all places(cities) in state
+        values = stateValue.split(";")
+        wait_and_click(xpath, select, value="{};{}; ".format(values[0], values[1])) # select all places(cities) in state
     
         click_btn("//*[@id='btnAddGeoItem']") # click add
         click_btn("//*[@id='btnGeoNext']") # click next
@@ -86,9 +88,10 @@ def select_properties():
     click_btn("//*[@id='btnTableNext']") # click next
 
 def is_subset(super, sub):
-    super_list = super.split(" ")
-    sub_list = sub.split(" ")
-    return super_list.issubset(sub_list)
+    for word in sub:
+        if word not in super:
+            return False
+    return True
     
 
 def get_city_data():
@@ -107,7 +110,7 @@ def get_city_data():
         
         for (key, value) in states.items():
             if(key in state.scrape_states.keys()):
-                select_place(key, value) # pass state(other terrorties included) num 1-72 and state name
+                select_place(value) # pass state(other terrorties included) num 1-72 and state name
                 select_properties()
 
         driver.close()
