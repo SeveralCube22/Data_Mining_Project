@@ -1,6 +1,8 @@
+from ast import parse
 from asyncio import wait_for
 from multiprocessing.connection import wait
 from operator import truediv
+from tkinter.tix import Tree
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -9,6 +11,7 @@ from selenium.webdriver.support.ui import Select
 from bs4 import BeautifulSoup
 from sensitive import get_keys
 
+import time
 import os.path
 import state
         
@@ -106,8 +109,8 @@ def get_city_data():
     wait_and_click("//*[@id='dashboard']/div[5]/div/div/div[5]/div[1]/button", click_btn)
     init = False
     
-    for i in range(11):
-        click_btn("//*[@id='dashboard']/div[5]/div/div/div[5]/div[2]/div[{}]/div[2]/a[1]".format(2 + i)) # iterating over begin     report buttons for years 2009-2019
+    for yearI in range(11):
+        click_btn("//*[@id='dashboard']/div[5]/div/div/div[5]/div[2]/div[{}]/div[2]/a[1]".format(2 + yearI)) # iterating over begin     report buttons for years 2009-2019
    
         WebDriverWait(driver, 10).until(EC.number_of_windows_to_be(2))   
         child = driver.window_handles[1]      
@@ -117,34 +120,143 @@ def get_city_data():
         if not init: 
             select_place()
             init = True
-        
-        for (key, value) in states.items():
-            if(key in state.scrape_states.keys()):
+        file_init = False
+        for (stateName, value) in states.items():
+            if(stateName in state.scrape_states.keys()):
                 select_place(value) # pass state(other terrorties included) num 1-72 and state name
                 select_properties()
-                store_table_link(2019 - i, key, driver.current_url)
+                # store_table_link(2019 - yearI, stateName, driver.current_url)
+                wait_for_element("//*[@id='resultsHtmlContainer']")
+                all_cities = []
+                city_span_init = False
+                while True:
+                    city_data = []
+                    for i in range(2): # 2 pages for all attribute tables. Cannot do it dynamically, so doing this instead
+                        x = parse_table()
+                        city_data.append(x) # holds the different table data for set of cities (since tables are on separate pages)
+                        
+                        wait_and_click("//*[@id='results']/tbody/tr/td[2]/div[1]/span[1]", click_btn)
+                        time.sleep(1)
+                        wait_for_element("//*[@id='resultTable']/table")
+                        
+                    combined = city_data[0]  # combine all tables into one dictionary
+                    for i in range(1, len(city_data)):
+                        city = city_data[i]
+                        for key, value in city.items():
+                            for attrib, attribValue in value.items():
+                                combined[key][attrib] = attribValue
+                    
+                    time.sleep(1)       
+                    all_cities.append(combined)
+                    if exit_table(True):
+                        break
+            
+                    if not city_span_init: # first page next button has a different xpath than subsequent pages
+                        wait_and_click("/html/body/div[1]/div[5]/div[2]/div[1]/div[1]/table/tbody/tr/td[2]/div[2]/span[1]", click_btn)
+                        city_span_init = True
+                    else:
+                        wait_and_click("/html/body/div[1]/div[5]/div[2]/div[1]/div[1]/table/tbody/tr/td[2]/div[2]/span[3]", click_btn)
+                    time.sleep(1)
+                    wait_for_element("//*[@id='results']")
+                    
+                cities = all_cities[0]
+                for city in all_cities:
+                    for key, value in city.items():
+                        cities[key] = value
+                
+                file = open("data.csv", 'a')
+                for city, attrib in cities.items():
+                    city = city.replace(", {}".format(stateName), "")
+                    line = "{}, {}, {}, ".format(stateName, 2019 - yearI, city)
+                    title = "STATE, YEAR, CITY, "
+                    i = 0
+                    for attribName, attribValue in attrib.items():
+                        if not file_init:
+                            attribName = attribName.replace(',', '')
+                            if i < len(attrib.values()) - 1:
+                                title += "{},".format(attribName)
+                            else:
+                                title += "{}\n".format(attribName)
+                        try:
+                            attribValue = attribValue.replace(',', '')
+                            value = float(attribValue)
+                        except:
+                            if attribValue == "null":
+                                value = "null"
+                            else:
+                                value = float(attribValue[1]) # dollars
+                        if i < len(attrib.values()) - 1:
+                            line += "{}, ".format(value)
+                        else:
+                            line += "{}\n".format(value)
+                        i += 1
+                    if not file_init:
+                        file.write(title)
+                        file_init = True
+                    file.write(line)
+                
+                year = {2019 - yearI: cities}   
+                parsed_state_data[stateName] = year
+                
                 driver.get(curr_url)
                      
         driver.close()
         driver.switch_to.window(driver.window_handles[0])
-    
-    # parse resultant html page
-    
 
-# Get crime data for every city(mentioned in ACS) in California from FBI api
+def exit_table(isCity):
+    soup = BeautifulSoup(driver.page_source, "html.parser")
+    links = soup.find("td", {"class": "links"})
+    if isCity:
+        div = links.find_all("div")[1]
+    else:
+        div = links.find_all("div")[0]
+    for span in div.find_all("span"):
+        if span.text == "Next":
+            return False
+    return True
+
+def parse_table():
+    wait_for_element("//*[@id='resultTable']/table")
+    soup = BeautifulSoup(driver.page_source, "html.parser")
+    cities = {}
+    table = soup.find("table", {"class": "TableReportResults"})
+    
+    tBody = table.find("tbody")
+    city_tr = tBody.find("tr", {"class": "RTGeoHeaderRow"})
+    
+    city_indices = {}
+    for i, city in enumerate(city_tr.find_all("td", {"class": "RTGeoRowDataCol"})):
+        city_indices[i] = city.text
+        cities[city.text] = {}
+      
+    data_rows = tBody.find_all("tr", {"class": "RTVarRow"})
+    for row in data_rows:
+        attrib_name_elem = row.find("td", {"class": "RTVarName"})
+        attrib_name_div = attrib_name_elem.find("div")
+        attrib_name = attrib_name_div.text
+        
+        for i, attrib in enumerate(row.find_all("td", {"class": "RTVarRowDataCol"})):
+            if attrib.text == "":
+                cities[city_indices[i]][attrib_name] = "null"
+            else:
+                cities[city_indices[i]][attrib_name] = attrib.text
+    
+    return cities
      
-sensitive = get_keys()
-states = {} # parse HTML to get stateNums and stateNames for use in select_place function
+if(__name__ == "__main__"): 
+    sensitive = get_keys()
+    states = {} # parse HTML to get stateNums and stateNames for use in select_place function
+    parsed_state_data = {}
+    
+    city_properties = ["Total Population", "Population Density", "Land Area", "Sex by Age", "Race", "Households by Household Type", "Household Size (Renter-Occupied Housing Units", "Educational Attainment for Population 25 Years and Over", "School Dropout Rate for Population 16 to 19 Years", "Employment Status for Total Population", "Unemployment Rate for Civilian Population", "Industry by Occupation for Employed Civilian Population", "Occupation for Employed Civilian Population", "Average Household Income", "Average Household Income by Race", "Gini Index", "Housing Units by Monthly Housing Costs", "Poverty Status for Population Age 18 to 64", "Poverty Status for Population Age 65 and Over", "Means of Transportation to Work for Workers"]
 
-city_properties = ["Total Population", "Population Density", "Land Area", "Sex by Age", "Race", "Households by Household Type", "Household Size (Renter-Occupied Housing Units", "Educational Attainment for Population 25 Years and Over", "School Dropout Rate for Population 16 to 19 Years", "Employment Status for Total Population", "Unemployment Rate for Civilian Population", "Industry by Occupation for Employed Civilian Population", "Occupation for Employed Civilian Population", "Average Household Income", "Average Household Income by Race", "Gini Index", "Housing Units by Monthly Housing Costs", "Poverty Status for Population Age 18 to 64", "Poverty Status for Population Age 65 and Over", "Means of Transportation to Work for Workers"]
+    sol_explore = "https://www.socialexplorer.com/explore-tables"
+    driver = webdriver.Chrome(executable_path='C:/Users/manam/Desktop/chromedriver_win32/chromedriver.exe')
+    driver.get(sol_explore)
 
-sol_explore = "https://www.socialexplorer.com/explore-tables"
-driver = webdriver.Chrome(executable_path='C:/Users/manam/Desktop/chromedriver_win32/chromedriver.exe')
-driver.get(sol_explore)
-
-try: # sometimes website asks to login other times it doesn't
-    login()
-    get_city_data()
-except:
-    get_city_data()
+    try: # sometimes website asks to login other times it doesn't
+        login()
+        get_city_data()
+    except:
+        get_city_data()
 
