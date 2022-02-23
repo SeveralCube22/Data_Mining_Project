@@ -1,8 +1,3 @@
-from ast import parse
-from asyncio import wait_for
-from multiprocessing.connection import wait
-from operator import truediv
-from tkinter.tix import Tree
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -105,12 +100,13 @@ def is_subset(super, sub):
     return True
     
 
-def get_city_data():
+def get_city_data(rows=None):
     wait_and_click("//*[@id='dashboard']/div[5]/div/div/div[5]/div[1]/button", click_btn)
     init = False
-    
-    for yearI in range(11):
-        click_btn("//*[@id='dashboard']/div[5]/div/div/div[5]/div[2]/div[{}]/div[2]/a[1]".format(2 + yearI)) # iterating over begin     report buttons for years 2009-2019
+    file_init = False
+    processed = 0
+    for yearI in range(10):
+        click_btn("//*[@id='dashboard']/div[5]/div/div/div[5]/div[2]/div[{}]/div[2]/a[1]".format(2 + yearI)) # iterating over begin     report buttons for years 2010-2019
    
         WebDriverWait(driver, 10).until(EC.number_of_windows_to_be(2))   
         child = driver.window_handles[1]      
@@ -120,7 +116,6 @@ def get_city_data():
         if not init: 
             select_place()
             init = True
-        file_init = False
         for (stateName, value) in states.items():
             if(stateName in state.scrape_states.keys()):
                 select_place(value) # pass state(other terrorties included) num 1-72 and state name
@@ -184,7 +179,7 @@ def get_city_data():
                             if attribValue == "null":
                                 value = "null"
                             else:
-                                value = float(attribValue[1]) # dollars
+                                value = float(attribValue[1:]) # dollars
                         if i < len(attrib.values()) - 1:
                             line += "{}, ".format(value)
                         else:
@@ -194,6 +189,9 @@ def get_city_data():
                         file.write(title)
                         file_init = True
                     file.write(line)
+                    processed += 1
+                    if rows != None and processed >= rows:
+                        return
                 
                 year = {2019 - yearI: cities}   
                 parsed_state_data[stateName] = year
@@ -243,20 +241,14 @@ def parse_table():
     
     return cities
      
-if(__name__ == "__main__"): 
-    sensitive = get_keys()
-    states = {} # parse HTML to get stateNums and stateNames for use in select_place function
-    parsed_state_data = {}
+sensitive = get_keys()
+states = {} # parse HTML to get stateNums and stateNames for use in select_place function
+parsed_state_data = {}
     
-    city_properties = ["Total Population", "Population Density", "Land Area", "Sex by Age", "Race", "Households by Household Type", "Household Size (Renter-Occupied Housing Units", "Educational Attainment for Population 25 Years and Over", "School Dropout Rate for Population 16 to 19 Years", "Employment Status for Total Population", "Unemployment Rate for Civilian Population", "Industry by Occupation for Employed Civilian Population", "Occupation for Employed Civilian Population", "Average Household Income", "Average Household Income by Race", "Gini Index", "Housing Units by Monthly Housing Costs", "Poverty Status for Population Age 18 to 64", "Poverty Status for Population Age 65 and Over", "Means of Transportation to Work for Workers"]
+city_properties = ["Total Population", "Population Density", "Land Area", "Sex", "Race", "Households by Household Type", "Household Size (Renter-Occupied Housing Units", "Educational Attainment for Population 25 Years and Over", "Employment Status for Total Population", "Unemployment Rate for Civilian Population", "Industry by Occupation for Employed Civilian Population", "Average Household Income", "Gini Index", "Means of Transportation to Work for Workers"]
 
-    sol_explore = "https://www.socialexplorer.com/explore-tables"
-    driver = webdriver.Chrome(executable_path='C:/Users/manam/Desktop/chromedriver_win32/chromedriver.exe')
-    driver.get(sol_explore)
+sol_explore = "https://www.socialexplorer.com/explore-tables"
+driver = webdriver.Chrome(executable_path='C:/Users/manam/Desktop/chromedriver_win32/chromedriver.exe')
+driver.get(sol_explore)
 
-    try: # sometimes website asks to login other times it doesn't
-        login()
-        get_city_data()
-    except:
-        get_city_data()
 
