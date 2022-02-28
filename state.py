@@ -32,6 +32,7 @@ def get_ori_code(state, cities):
 
     city_ori = {}
     not_found = {}
+    state_code = scrape_states[state]
     for city in cities:
         found = False
         cityName = city.replace("city", "")
@@ -44,13 +45,14 @@ def get_ori_code(state, cities):
             
             for line in county:
                 try:
-                    res = re.search("CA[0-9]+", line)
+                    res = re.search("{}[0-9]+".format(state_code), line)
                     index = res.start()
                     cmpLine = line[:index]
                 except:
                     cmpLine = line
                 if cityName.strip().upper() in line and ("POLICE DEPARTMENT" in line or "PD" in line or "POLICE DEPT" in line or "DEPARTMENT OF PUBLIC SAFETY" in line or cityName.strip().upper() == cmpLine.strip()):
-                    city_ori[city] = re.findall("CA[0-9][A-Za-z0-9]+", line)[1] 
+                    # print(city, re.findall("{}[A-Za-z0-9][A-Za-z0-9]+".format(state_code), line))
+                    city_ori[city] = re.findall("{}[A-Za-z0-9][A-Za-z0-9]+".format(state_code), line)[-1] 
                     found = True
         if not found:
             not_found[city] = None
@@ -60,14 +62,14 @@ def get_ori_code(state, cities):
     
     
 def get_cities(year, state):
-    df = pd.read_csv("data.csv", sep=",",encoding="latin1")
+    df = pd.read_csv("city_data.csv", sep=",",encoding="latin1")
     df.columns = df.columns.str.strip()
     
     filtered = df.loc[(df["YEAR"] == year) & (df["STATE"] == state)]
     cities = [city.strip() for city in filtered["CITY"]]
     return cities
     
-scrape_states = {"California": None}
+scrape_states = {"California": "CA", "New York": "NY", "Alabama": "AL", "Texas": "TX"}
 
 
 

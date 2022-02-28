@@ -5,7 +5,7 @@ import requests
 
 def get_crime_data():
     sensitive = get_keys()
-    file = open("data.csv", "r")
+    file = open("city_data.csv", "r")
     init = False
     codes = {}
     lines = []
@@ -20,15 +20,18 @@ def get_crime_data():
         state = attribs[0].strip()
         year = attribs[1].strip()
         
-        if year not in codes:
-            codes[year] = get_ori_code(state, get_cities(int(year), state))
+        if state not in codes:
+            codes[state] = {}
+        if year not in codes[state]:
+            codes[state][year] = get_ori_code(state, get_cities(int(year), state))
         
         cityName = attribs[2].strip()
-        year_codes = codes[year][0]
-        not_found = codes[year][1]
+        state_codes = codes[state][year][0]
+        not_found = codes[state][year][1]
         
         if cityName not in not_found:
-            ori = year_codes[cityName]
+            ori = state_codes[cityName]
+            print("ORI: ", ori, cityName)
             url = "https://api.usa.gov/crime/fbi/sapi/api/summarized/agencies/{}/offenses/{}/{}?API_KEY={}".format(ori, year, year, sensitive["FBI_API"])
             
             response = requests.get(url.strip())
@@ -37,7 +40,10 @@ def get_crime_data():
             # collect attrib names
             attribs = {}
             try:
-                results = data["results"]            
+                results = data["results"]
+                if len(results) == 0: # Sometimes FBI returns empty list as results
+                    continue 
+                           
                 for value in results:
                     attribs[value["offense"]] = value["actual"]
                 
@@ -62,7 +68,7 @@ def get_crime_data():
                 line += aLine
                 lines.append(line)
                 print(year)
-            except:
+            except: # if FBI has no data for this city, skip
                 continue
     file = open("data.csv", "w")
     file.write(header)

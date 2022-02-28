@@ -134,12 +134,14 @@ def get_city_data(rows=None):
                         time.sleep(1)
                         wait_for_element("//*[@id='resultTable']/table")
                         
-                    combined = city_data[0]  # combine all tables into one dictionary
-                    for i in range(1, len(city_data)):
+                    combined = {}  # combine all tables into one dictionary
+                    for i in range(0, len(city_data)):
                         city = city_data[i]
                         for key, value in city.items():
-                            for attrib, attribValue in value.items():
-                                combined[key][attrib] = attribValue
+                                if key in combined:
+                                    combined[key].update(value)
+                                else:
+                                    combined[key] = value
                     
                     time.sleep(1)       
                     all_cities.append(combined)
@@ -159,7 +161,7 @@ def get_city_data(rows=None):
                     for key, value in city.items():
                         cities[key] = value
                 
-                file = open("data.csv", 'a')
+                file = open("city_data.csv", 'a')
                 for city, attrib in cities.items():
                     city = city.replace(", {}".format(stateName), "")
                     line = "{}, {}, {}, ".format(stateName, 2019 - yearI, city)
@@ -234,10 +236,11 @@ def parse_table():
         attrib_name = attrib_name_div.text
         
         for i, attrib in enumerate(row.find_all("td", {"class": "RTVarRowDataCol"})):
+            name = attrib_name.replace(":", "")
             if attrib.text == "":
-                cities[city_indices[i]][attrib_name] = "null"
+                cities[city_indices[i]][name] = "null"
             else:
-                cities[city_indices[i]][attrib_name] = attrib.text
+                cities[city_indices[i]][name] = attrib.text
     
     return cities
      
