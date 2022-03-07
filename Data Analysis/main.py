@@ -122,10 +122,11 @@ colors = ["lightcoral", "gold",  "red"]
 
 for bin, color in zip(bins, colors):
     indicesToKeep = pc_df['Bin'] == bin
-    plt.scatter(pc_df.loc[indicesToKeep, 'pc 1']
-                ,pc_df.loc[indicesToKeep, 'pc 2']
-                ,c = color
-                ,s = 50)
+    plt.scatter(pc_df.loc[indicesToKeep, 'pc 1'],
+                pc_df.loc[indicesToKeep, 'pc 2'],
+                c = color,
+                s = 50)
 
 plt.legend(bins)  
-plt.show() 
+plt.show() # So for each row the city attribs can now be reduced down to just these two components. Plotting the cities accoring to these two components (Years has no affect, so essentilly plotting same cities at different years). Binning crime in each city and color coding to see if there are clusters of cities with similar crime. 
+
