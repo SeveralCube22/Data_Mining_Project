@@ -94,7 +94,7 @@ variance = np.cumsum(np.round(pca.explained_variance_ratio_, decimals=3)*100)
 print("DATA REDUCTION OUTPUT")
 print("Variance = ", variance) # OBSERVATION: first 3 components account for 91% of variance
 
-print(pd.DataFrame(data = pca.components_[0], columns = ['eigenvector'])) # weights or loadings of the first eigenvector. First eigenvector = eigenvector with highest absolute eigenvalue
+print(pd.DataFrame(data = pca.components_[0], columns = ['eigenvector'])) # weights or loadings of the first eigenvector. First eigenvector = eigenvector with highest absolute eigenvalue. Can use n eigenvectors to form a new matrix which can be used to calculate the new dataset. Transformed dataset = Normalized matrix * eigenmatrix?
 
 pc_df = pd.DataFrame(data = pcs[:, 0:2], columns = ['pc 1', 'pc 2'])
 print(pc_df)
@@ -128,5 +128,5 @@ for bin, color in zip(bins, colors):
                 s = 50)
 
 plt.legend(bins)  
-plt.show() # So for each row the city attribs can now be reduced down to just these two components. Plotting the cities accoring to these two components (Years has no affect, so essentilly plotting same cities at different years). Binning crime in each city and color coding to see if there are clusters of cities with similar crime. 
+plt.show() # So for each row the city attribs can now be reduced down to just these two components. Plotting each city according to these two components in this new basis(Years has no effect, so essentilly plotting the same cities at different years). Not using the city names to identify each point instead binning crime in each city and color coding to see if there are clusters of cities with similar crime. 
 
