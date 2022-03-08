@@ -35,7 +35,8 @@ for rowI, row in df.iterrows(): #iterate over rows
                 except:
                     pass
         colI += 1
-        
+
+print(df)    
 # Summary Statistics
 
 statistics = {} # overall statisitcs 
@@ -72,12 +73,45 @@ print("---------------------------------------------------------")
 
 import numpy as np
 from sklearn.decomposition import PCA
+import pywt 
 
-def normalize(df):
+
+def normalize(df, crime=False):
     result = df.copy()
     for name in df.columns:
-        result[name] = (df[name] - statistics[name][0]) / statistics[name][1] # z-score
+        (mean, std) = statistics[name] if not crime else statistics["CRIME"][name]
+        result[name] = (df[name] - mean) / std # z-score
     return result
+
+def reduce_vector(data_vector):
+    (approx, detail) = pywt.dwt(data_vector, 'haar', mode='zpd')
+    if len(approx) == 1:
+        return (approx, detail)
+    else:
+        return reduce_vector(approx)
+        
+def calculate_wavelet_coeff(df, crime=False):
+    coeff = pd.DataFrame()
+    approximations = []
+    details = []
+    for i, row in df.iterrows():
+        (approx, detail) = reduce_vector(row.tolist())
+        approximations.append(approx[0])
+        details.append(detail[0])
+        
+    coeff["Approximations"] = approximations
+    if not crime:
+        coeff["Details"] = details
+    
+    return coeff
+
+def plot(df, bins, colors, col_names, isPCA):
+    for bin, color in zip(binNames, colors):
+        indicesToKeep = pc_df['Total Bin'] == bin
+        plt.scatter(df.loc[indicesToKeep, col_names[0]],
+                    df.loc[indicesToKeep, col_names[1]],
+                    c = color,
+                    s = 40)
 
 crime_start = df.columns.get_loc("aggravated-assault")
 
@@ -85,6 +119,7 @@ city_attributes = df.iloc[:, range(3, crime_start)] # Starting from 3 to skip ST
 crime_attributes = df.iloc[:, range(crime_start, len(df.columns))]
 
 scaled_city = normalize(city_attributes)
+print(scaled_city)
                                                                          # covar(x1, x1) Just represents variance in that attribute
 pca = PCA(n_components = len(scaled_city.columns)) # Covariance matrix ([covar(x1,x1), covar(x1, x2), etc.]). Finding eigenvectors and eigenvalues from this matrix. Eigenvectors are sorted according to eigenvalues. Eigenvalues represents how much variance that eigenvector accounts for. Variance meaning how spread out the points are along that vector. 
 
@@ -99,34 +134,44 @@ print(pd.DataFrame(data = pca.components_[0], columns = ['eigenvector'])) # weig
 pc_df = pd.DataFrame(data = pcs[:, 0:2], columns = ['pc 1', 'pc 2'])
 print(pc_df)
 
-crime_attributes['Total'] = crime_attributes.iloc[:, range(len(crime_attributes.columns))].sum(axis=1)
+pca_crime = PCA(n_components=1)
+pcs_crime = pca_crime.fit_transform(normalize(crime_attributes, crime=True))
 
-crime_quantiles = crime_attributes.Total.quantile([0.33,0.66])
+crime_attributes["Approximations"] = calculate_wavelet_coeff(crime_attributes, crime=True)
+crime_attributes["Total"] = crime_attributes.iloc[:, range(len(crime_attributes.columns) - 1)].sum(axis=1) # Exclude approximations from total
+crime_attributes["PC 1"] = pcs_crime
 
-def bin(crime_rows):
-    if crime_rows["Total"] <= crime_quantiles[.33]:
-        return 'Low'
-    elif crime_rows["Total"] <= crime_quantiles[.66]:
-        return "Medium"
-    else:
-        return "High"
-    
-crime_attributes["Bin"] = crime_attributes.apply(bin, axis = 1)
+
+binNames = ["Low", "Medium", "High"]
+crime_attributes["PC Bin"] = pd.cut(crime_attributes["PC 1"], 3, labels=binNames) # Binning crime based on principle component
+crime_attributes["Total Bin"] = pd.cut(crime_attributes["Total"], 3, labels=binNames)
+crime_attributes["Approx Bin"] = pd.cut(crime_attributes["Approximations"], 3, labels=binNames)
+
+print("----------CRIME ATTRIBUTES----------")
 print(crime_attributes)
 
-pc_df = pd.concat([pc_df, crime_attributes[['Bin']]], axis = 1)
+pc_df = pd.concat([pc_df, crime_attributes[['Total Bin']]], axis = 1)
 print(pc_df)
 
-bins = ["Low", "Medium", "High"]
-colors = ["lightcoral", "gold",  "red"]
 
-for bin, color in zip(bins, colors):
-    indicesToKeep = pc_df['Bin'] == bin
-    plt.scatter(pc_df.loc[indicesToKeep, 'pc 1'],
-                pc_df.loc[indicesToKeep, 'pc 2'],
-                c = color,
-                s = 50)
+colors = ["lightcoral", "blue", "red"]
 
-plt.legend(bins)  
-plt.show() # So for each row the city attribs can now be reduced down to just these two components. Plotting each city according to these two components in this new basis(Years has no effect, so essentilly plotting the same cities at different years). Not using the city names to identify each point instead binning crime in each city and color coding to see if there are clusters of cities with similar crime. For ex. L.A, 12000(tot pop), 5000(# males), High -> L.A, -2, -3, High. Point at -2, -3 is identified by high crime
+plot(pc_df, binNames, colors, ["pc 1", "pc 2"], True) # plotting PCA
 
+plt.xlabel("Principal Component 1")
+plt.ylabel("Principal Component 2")
+plt.legend(binNames)  
+plt.show() # So for each row the city attribs can now be reduced down to just these two components. Plotting each city according to these two components in this new basis(Years has no effect, so essentilly plotting the same cities at different years). Not using the city names to identify each point instead binning crime in each city and color coding to see if there are clusters of cities with similar crime. For ex. L.A, 12000(tot pop), 5000(# males), High -> L.A, -2, -3, High. Point at -2, -3 is identified by high crime instead of city name
+
+
+wavelet_df = calculate_wavelet_coeff(scaled_city)
+
+wavelet_df = pd.concat([wavelet_df, crime_attributes[['Total Bin']]], axis = 1)
+print(wavelet_df)
+
+plot(wavelet_df, binNames, colors, ["Approximations", "Details"], False) # plotting wavelet
+
+plt.xlabel("Approximations")
+plt.ylabel("Details")
+plt.legend(binNames)  
+plt.show()
