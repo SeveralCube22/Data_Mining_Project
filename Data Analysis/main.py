@@ -90,7 +90,7 @@ def reduce_vector(data_vector):
     else:
         return reduce_vector(approx)
         
-def calculate_wavelet_coeff(df, crime=False):
+def calculate_wavelet_coeff(df):
     coeff = pd.DataFrame()
     approximations = []
     details = []
@@ -100,18 +100,21 @@ def calculate_wavelet_coeff(df, crime=False):
         details.append(detail[0])
         
     coeff["Approximations"] = approximations
-    if not crime:
-        coeff["Details"] = details
+    coeff["Details"] = details
     
     return coeff
 
-def plot(df, bins, colors, col_names, isPCA):
+def plot(df, bins, colors, col_names):
     for bin, color in zip(binNames, colors):
-        indicesToKeep = pc_df['Total Bin'] == bin
+        indicesToKeep = pc_df['Bin'] == bin
         plt.scatter(df.loc[indicesToKeep, col_names[0]],
                     df.loc[indicesToKeep, col_names[1]],
                     c = color,
                     s = 40)
+    plt.xlabel(col_names[0])
+    plt.ylabel(col_names[1])
+    plt.legend(binNames)  
+    plt.show()
 
 crime_start = df.columns.get_loc("aggravated-assault")
 
@@ -134,44 +137,26 @@ print(pd.DataFrame(data = pca.components_[0], columns = ['eigenvector'])) # weig
 pc_df = pd.DataFrame(data = pcs[:, 0:2], columns = ['pc 1', 'pc 2'])
 print(pc_df)
 
-pca_crime = PCA(n_components=1)
-pcs_crime = pca_crime.fit_transform(normalize(crime_attributes, crime=True))
-
-crime_attributes["Approximations"] = calculate_wavelet_coeff(crime_attributes, crime=True)
-crime_attributes["Total"] = crime_attributes.iloc[:, range(len(crime_attributes.columns) - 1)].sum(axis=1) # Exclude approximations from total
-crime_attributes["PC 1"] = pcs_crime
-
+crime_attributes["Total"] = crime_attributes.iloc[:, range(len(crime_attributes.columns))].sum(axis=1) # Exclude approximations from total
 
 binNames = ["Low", "Medium", "High"]
-crime_attributes["PC Bin"] = pd.cut(crime_attributes["PC 1"], 3, labels=binNames) # Binning crime based on principle component
-crime_attributes["Total Bin"] = pd.cut(crime_attributes["Total"], 3, labels=binNames)
-crime_attributes["Approx Bin"] = pd.cut(crime_attributes["Approximations"], 3, labels=binNames)
+crime_attributes["Bin"] = pd.cut(crime_attributes["Total"], 3, labels=binNames)
 
 print("----------CRIME ATTRIBUTES----------")
 print(crime_attributes)
 
-pc_df = pd.concat([pc_df, crime_attributes[['Total Bin']]], axis = 1)
+pc_df = pd.concat([pc_df, crime_attributes[['Bin']]], axis = 1)
 print(pc_df)
 
 
 colors = ["lightcoral", "blue", "red"]
 
-plot(pc_df, binNames, colors, ["pc 1", "pc 2"], True) # plotting PCA
+plot(pc_df, binNames, colors, ["pc 1", "pc 2"])  # So for each row the city attribs can now be reduced down to just these two components. Plotting each city according to these two components in this new basis(Years has no effect, so essentilly plotting the same cities at different years). Not using the city names to identify each point instead binning crime in each city and color coding to see if there are clusters of cities with similar crime. For ex. L.A, 12000(tot pop), 5000(# males), High -> L.A, -2, -3, High. Point at -2, -3 is identified by high crime instead of city name
 
-plt.xlabel("Principal Component 1")
-plt.ylabel("Principal Component 2")
-plt.legend(binNames)  
-plt.show() # So for each row the city attribs can now be reduced down to just these two components. Plotting each city according to these two components in this new basis(Years has no effect, so essentilly plotting the same cities at different years). Not using the city names to identify each point instead binning crime in each city and color coding to see if there are clusters of cities with similar crime. For ex. L.A, 12000(tot pop), 5000(# males), High -> L.A, -2, -3, High. Point at -2, -3 is identified by high crime instead of city name
-
-
+# Plotting wavelet
 wavelet_df = calculate_wavelet_coeff(scaled_city)
 
-wavelet_df = pd.concat([wavelet_df, crime_attributes[['Total Bin']]], axis = 1)
+wavelet_df = pd.concat([wavelet_df, crime_attributes[['Bin']]], axis = 1)
 print(wavelet_df)
 
-plot(wavelet_df, binNames, colors, ["Approximations", "Details"], False) # plotting wavelet
-
-plt.xlabel("Approximations")
-plt.ylabel("Details")
-plt.legend(binNames)  
-plt.show()
+plot(wavelet_df, binNames, colors, ["Approximations", "Details"]) # plotting wavelet
