@@ -139,8 +139,11 @@ print(pc_df)
 
 crime_attributes["Total"] = crime_attributes.iloc[:, range(len(crime_attributes.columns))].sum(axis=1) # Exclude approximations from total
 
+print("-----------------Crime Summary-------------------------")
+print(crime_attributes["Total"].max(), crime_attributes["Total"].min(), crime_attributes["Total"].mean(), crime_attributes["Total"].std())
+
 binNames = ["Low", "Medium", "High"]
-crime_attributes["Bin"] = pd.cut(crime_attributes["Total"], 3, labels=binNames)
+crime_attributes["Bin"] = pd.cut(crime_attributes["Total"], [0, 3000, 10000, np.inf], labels=binNames)
 
 print("----------CRIME ATTRIBUTES----------")
 print(crime_attributes)
