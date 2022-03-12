@@ -84,7 +84,7 @@ def select_properties():
     wait_for_element("//*[@id='geoItemsPagerContainer']")
 
 def store_table_link(year, state, url):
-    fileName = "table_links.csv"
+    fileName = "./Data Acquisition/table_links.csv"
     if(not os.path.exists(fileName)):
         file = open(fileName, "a")
         file.write("YEAR, STATE, URL\n")
@@ -118,87 +118,92 @@ def get_city_data(rows=None):
             init = True
         for (stateName, value) in states.items():
             if(stateName in state.scrape_states.keys()):
-                select_place(value) # pass state(other terrorties included) num 1-72 and state name
-                select_properties()
-                # store_table_link(2019 - yearI, stateName, driver.current_url)
-                wait_for_element("//*[@id='resultsHtmlContainer']")
-                all_cities = []
-                city_span_init = False
-                while True:
-                    city_data = []
-                    for i in range(2): # 2 pages for all attribute tables. Cannot do it dynamically, so doing this instead
-                        x = parse_table()
-                        city_data.append(x) # holds the different table data for set of cities (since tables are on separate pages)
+                try:
+                    select_place(value) # pass state(other terrorties included) num 1-72 and state name
+                    select_properties()
+                    # store_table_link(2019 - yearI, stateName, driver.current_url)
+                    wait_for_element("//*[@id='resultsHtmlContainer']")
+                    all_cities = []
+                    city_span_init = False
+                    while True:
+                        city_data = []
+                        for i in range(2): # 2 pages for all attribute tables. Cannot do it dynamically, so doing this instead
+                            x = parse_table()
+                            city_data.append(x) # holds the different table data for set of cities (since tables are on separate pages)
                         
-                        wait_and_click("//*[@id='results']/tbody/tr/td[2]/div[1]/span[1]", click_btn)
-                        time.sleep(1)
-                        wait_for_element("//*[@id='resultTable']/table")
+                            wait_and_click("//*[@id='results']/tbody/tr/td[2]/div[1]/span[1]", click_btn)
+                            time.sleep(1)
+                            wait_for_element("//*[@id='resultTable']/table")
                         
-                    combined = {}  # combine all tables into one dictionary
-                    for i in range(0, len(city_data)):
-                        city = city_data[i]
-                        for key, value in city.items():
-                                if key in combined:
-                                    combined[key].update(value)
-                                else:
-                                    combined[key] = value
+                        combined = {}  # combine all tables into one dictionary
+                        for i in range(0, len(city_data)):
+                            city = city_data[i]
+                            for key, value in city.items():
+                                    if key in combined:
+                                        combined[key].update(value)
+                                    else:
+                                        combined[key] = value
                     
-                    time.sleep(1)       
-                    all_cities.append(combined)
-                    if exit_table(True):
-                        break
+                        time.sleep(1)       
+                        all_cities.append(combined)
+                        if exit_table(True):
+                            break
             
-                    if not city_span_init: # first page next button has a different xpath than subsequent pages
-                        wait_and_click("/html/body/div[1]/div[5]/div[2]/div[1]/div[1]/table/tbody/tr/td[2]/div[2]/span[1]", click_btn)
-                        city_span_init = True
-                    else:
-                        wait_and_click("/html/body/div[1]/div[5]/div[2]/div[1]/div[1]/table/tbody/tr/td[2]/div[2]/span[3]", click_btn)
-                    time.sleep(1)
-                    wait_for_element("//*[@id='results']")
-                    
-                cities = all_cities[0]
-                for city in all_cities:
-                    for key, value in city.items():
-                        cities[key] = value
-                
-                file = open("city_data.csv", 'a')
-                for city, attrib in cities.items():
-                    city = city.replace(", {}".format(stateName), "")
-                    line = "{}, {}, {}, ".format(stateName, 2019 - yearI, city)
-                    title = "STATE, YEAR, CITY, "
-                    i = 0
-                    for attribName, attribValue in attrib.items():
-                        if not file_init:
-                            attribName = attribName.replace(',', '')
-                            if i < len(attrib.values()) - 1:
-                                title += "{},".format(attribName)
-                            else:
-                                title += "{}\n".format(attribName)
-                        try:
-                            attribValue = attribValue.replace(',', '')
-                            value = float(attribValue)
-                        except:
-                            if attribValue == "null":
-                                value = "null"
-                            else:
-                                value = float(attribValue[1:]) # dollars
-                        if i < len(attrib.values()) - 1:
-                            line += "{}, ".format(value)
+                        if not city_span_init: # first page next button has a different xpath than subsequent pages
+                            wait_and_click("/html/body/div[1]/div[5]/div[2]/div[1]/div[1]/table/tbody/tr/td[2]/div[2]/span[1]", click_btn)
+                            city_span_init = True
                         else:
-                            line += "{}\n".format(value)
-                        i += 1
-                    if not file_init:
-                        file.write(title)
-                        file_init = True
-                    file.write(line)
-                    processed += 1
-                    if rows != None and processed >= rows:
-                        return
+                            wait_and_click("/html/body/div[1]/div[5]/div[2]/div[1]/div[1]/table/tbody/tr/td[2]/div[2]/span[3]", click_btn)
+                        time.sleep(1)
+                        wait_for_element("//*[@id='results']")
+                    
+                    cities = all_cities[0]
+                    for city in all_cities:
+                        for key, value in city.items():
+                            cities[key] = value
+
+                    file = open("./Data Acquisition/city_data.csv", 'a')
+                    for city, attrib in cities.items():
+                        city = city.replace(", {}".format(stateName), "")
+                        line = "{}, {}, {}, ".format(stateName, 2019 - yearI, city)
+                        title = "STATE, YEAR, CITY, "
+                        i = 0
+                        for attribName, attribValue in attrib.items():
+                            if not file_init:
+                                attribName = attribName.replace(',', '')
+                                if i < len(attrib.values()) - 1:
+                                    title += "{},".format(attribName)
+                                else:
+                                    title += "{}\n".format(attribName)
+                            try:
+                                attribValue = attribValue.replace(',', '')
+                                value = float(attribValue)
+                            except:
+                                if attribValue == "null":
+                                    value = "null"
+                                else:
+                                    value = float(attribValue[1:]) # dollars
+                            if i < len(attrib.values()) - 1:
+                                line += "{}, ".format(value)
+                            else:
+                                line += "{}\n".format(value)
+                            i += 1
+                        if not file_init:
+                            file.write(title)
+                            file_init = True
+                        file.write(line)
+                        processed += 1
+                        if rows != None and processed >= rows:
+                            return
                 
-                year = {2019 - yearI: cities}   
-                parsed_state_data[stateName] = year
+                    year = {2019 - yearI: cities}   
+                    parsed_state_data[stateName] = year
                 
-                driver.get(curr_url)
+                    driver.get(curr_url)
+                except:
+                    print("Skipping {} in {}".format(stateName, 2019-yearI))
+                    driver.get(curr_url)
+                    continue
                      
         driver.close()
         driver.switch_to.window(driver.window_handles[0])

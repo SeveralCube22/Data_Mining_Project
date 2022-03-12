@@ -1,6 +1,6 @@
 def get_keys():
     sensitive = {}
-    f = open("./sensitive.txt", "r")
+    f = open("./Data Acquisition/sensitive.txt", "r")
     for line in f:
         (key, value) = line.split(",")
         sensitive[key] = value

@@ -15,7 +15,6 @@ def populate_summary_statistics(df, statistics):
         except:
             pass # STATE, CITY
         
-# Data Clean
 
 # Some attributes have null values, since the range are values > 0, the null values will become -1.
 
@@ -36,6 +35,7 @@ for rowI, row in df.iterrows(): #iterate over rows
                     pass
         colI += 1
 
+df.dropna(inplace=True)
 print(df)    
 # Summary Statistics
 
@@ -45,7 +45,7 @@ statistics["CRIME"] = {}
 populate_summary_statistics(df, statistics)
     
 # print(statistics["CRIME"])
-df = df.drop("human-trafficing", 1) # mean and std are 0
+df.drop("human-trafficing", 1, inplace=True) # mean and std are 0
 
 year_statistics = {}
 
@@ -72,41 +72,13 @@ print("---------------------------------------------------------")
 # Data Reduction
 
 import numpy as np
+from sklearn import preprocessing
 from sklearn.decomposition import PCA
 import pywt 
 
-
-def normalize(df, crime=False):
-    result = df.copy()
-    for name in df.columns:
-        (mean, std) = statistics[name] if not crime else statistics["CRIME"][name]
-        result[name] = (df[name] - mean) / std # z-score
-    return result
-
-def reduce_vector(data_vector):
-    (approx, detail) = pywt.dwt(data_vector, 'haar', mode='zpd')
-    if len(approx) == 1:
-        return (approx, detail)
-    else:
-        return reduce_vector(approx)
-        
-def calculate_wavelet_coeff(df):
-    coeff = pd.DataFrame()
-    approximations = []
-    details = []
-    for i, row in df.iterrows():
-        (approx, detail) = reduce_vector(row.tolist())
-        approximations.append(approx[0])
-        details.append(detail[0])
-        
-    coeff["Approximations"] = approximations
-    coeff["Details"] = details
-    
-    return coeff
-
-def plot(df, bins, colors, col_names):
+def plot(df, binNames, colors, col_names):
     for bin, color in zip(binNames, colors):
-        indicesToKeep = pc_df['Bin'] == bin
+        indicesToKeep = df['Bin'] == bin
         plt.scatter(df.loc[indicesToKeep, col_names[0]],
                     df.loc[indicesToKeep, col_names[1]],
                     c = color,
@@ -118,11 +90,13 @@ def plot(df, bins, colors, col_names):
 
 crime_start = df.columns.get_loc("aggravated-assault")
 
-city_attributes = df.iloc[:, range(3, crime_start)] # Starting from 3 to skip STATE, CITY, YEAR
-crime_attributes = df.iloc[:, range(crime_start, len(df.columns))]
+city_attributes = df.iloc[:, range(3, crime_start)].reset_index(drop=True) # Starting from 3 to skip STATE, CITY, YEAR
+crime_attributes = df.iloc[:, range(crime_start, len(df.columns))].reset_index(drop=True)
 
-scaled_city = normalize(city_attributes)
-print(scaled_city)
+min_max_scaler = preprocessing.MinMaxScaler()
+scaled_city = pd.DataFrame(min_max_scaler.fit_transform(city_attributes.iloc[:, :]))
+print(city_attributes)
+
                                                                          # covar(x1, x1) Just represents variance in that attribute
 pca = PCA(n_components = len(scaled_city.columns)) # Covariance matrix ([covar(x1,x1), covar(x1, x2), etc.]). Finding eigenvectors and eigenvalues from this matrix. Eigenvectors are sorted according to eigenvalues. Eigenvalues represents how much variance that eigenvector accounts for. Variance meaning how spread out the points are along that vector. 
 
@@ -132,10 +106,22 @@ variance = np.cumsum(np.round(pca.explained_variance_ratio_, decimals=3)*100)
 print("DATA REDUCTION OUTPUT")
 print("Variance = ", variance) # OBSERVATION: first 3 components account for 91% of variance
 
-print(pd.DataFrame(data = pca.components_[0], columns = ['eigenvector'])) # weights or loadings of the first eigenvector. First eigenvector = eigenvector with highest absolute eigenvalue. Can use n eigenvectors to form a new matrix which can be used to calculate the new dataset. Transformed dataset = Normalized matrix * eigenmatrix?
+weights = pd.DataFrame(data = pca.components_[0], columns = ['eigenvector']) # weights or loadings of the first eigenvector. First eigenvector = eigenvector with highest absolute eigenvalue. Can use n eigenvectors to form a new matrix which can be used to calculate the new dataset. Transformed dataset = Normalized matrix * eigenmatrix?
 
+print("TOP WEIGHTS IN EIGENVECTOR PC 1")
+for index, value in weights[(weights > .15).any(1)].iterrows():
+    name = city_attributes.columns[index]
+    print("Weight: {} Index: {} Col Name: {} Mean: {}".format(value[0], index, name, statistics[name][0]))
+
+print()
+weights = pd.DataFrame(data = pca.components_[1], columns = ['eigenvector'])
+print("TOP WEIGHTS IN EIGENVECTOR PC 2")
+for index, value in weights[(weights > .15).any(1)].iterrows():
+    name = city_attributes.columns[index]
+    print("Weight: {} Index: {} Col Name: {} Mean: {}".format(value[0], index, name, statistics[name][0]))
+    
+print()
 pc_df = pd.DataFrame(data = pcs[:, 0:2], columns = ['pc 1', 'pc 2'])
-print(pc_df)
 
 crime_attributes["Total"] = crime_attributes.iloc[:, range(len(crime_attributes.columns))].sum(axis=1) # Exclude approximations from total
 
@@ -143,7 +129,7 @@ print("-----------------Crime Summary-------------------------")
 print(crime_attributes["Total"].max(), crime_attributes["Total"].min(), crime_attributes["Total"].mean(), crime_attributes["Total"].std())
 
 binNames = ["Low", "Medium", "High"]
-crime_attributes["Bin"] = pd.cut(crime_attributes["Total"], [0, 3000, 10000, np.inf], labels=binNames)
+crime_attributes["Bin"] = pd.qcut(crime_attributes["Total"], [0, .33, .66, 1], labels=binNames) # [0, 3000, 10000, np.inf]
 
 print("----------CRIME ATTRIBUTES----------")
 print(crime_attributes)
@@ -155,11 +141,3 @@ print(pc_df)
 colors = ["lightcoral", "blue", "red"]
 
 plot(pc_df, binNames, colors, ["pc 1", "pc 2"])  # So for each row the city attribs can now be reduced down to just these two components. Plotting each city according to these two components in this new basis(Years has no effect, so essentilly plotting the same cities at different years). Not using the city names to identify each point instead binning crime in each city and color coding to see if there are clusters of cities with similar crime. For ex. L.A, 12000(tot pop), 5000(# males), High -> L.A, -2, -3, High. Point at -2, -3 is identified by high crime instead of city name
-
-# Plotting wavelet
-wavelet_df = calculate_wavelet_coeff(scaled_city)
-
-wavelet_df = pd.concat([wavelet_df, crime_attributes[['Bin']]], axis = 1)
-print(wavelet_df)
-
-plot(wavelet_df, binNames, colors, ["Approximations", "Details"]) # plotting wavelet
