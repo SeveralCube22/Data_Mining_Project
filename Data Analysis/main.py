@@ -1,8 +1,13 @@
+from matplotlib.cm import ScalarMappable
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn import preprocessing
 from sklearn.decomposition import PCA
+import pywt
+import geopandas as gpd
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.colors as plt_colors
 
 def data_clean():
     # Some attributes have null values, since the range are values > 0, the null values will become -1.
@@ -18,7 +23,7 @@ def data_clean():
                     df.iat[rowI, colI] = -1 # Note: iat returns some object that overloads [] or setitem dunder
                 else:
                     try:
-                        df.iat[rowI, colI] = float(value)
+                        df.iat[rowI, colI] = float(value) 
                     except:
                         pass
             colI += 1
@@ -83,13 +88,13 @@ def plot_reduced(df, bin_names, colors, col_names):
     plt.legend(bin_names)  
     plt.show()
 
-def principal_components(scaled_city, crime_attributes, statistics, bin_names, colors):
+def principal_components(city_attributes, scaled_city, crime_attributes, statistics):
                                                                          # covar(x1, x1) Just represents variance in that attribute
     pca = PCA(n_components = len(scaled_city.columns)) # Covariance matrix ([covar(x1,x1), covar(x1, x2), etc.]). Finding eigenvectors and eigenvalues from this matrix. Eigenvectors are sorted according to eigenvalues. Eigenvalues represents how much variance that eigenvector accounts for. Variance meaning how spread out the points are along that vector. 
 
     pcs = pca.fit_transform(scaled_city)
 
-    variance = np.cumsum(np.round(pca.explained_variance_ratio_, decimals=3)*100)
+    variance = np.cumsum(np.round(pca.explained_variance_ratio_, decimals=3) * 100)
     print("DATA REDUCTION OUTPUT")
     print("Variance = ", variance) # OBSERVATION: first 3 components account for 91% of variance
 
@@ -108,10 +113,95 @@ def principal_components(scaled_city, crime_attributes, statistics, bin_names, c
         print("Weight: {} Index: {} Col Name: {} Mean: {}".format(value[0], index, name, statistics[name][0]))
     
     print()
+    
     pc_df = pd.DataFrame(data = pcs[:, 0:2], columns = ['pc 1', 'pc 2'])
     pc_df = pd.concat([pc_df, crime_attributes[['Bin']]], axis = 1)
     
     return pc_df
+
+def reduce_vector(data_vector):
+    (approx, detail) = pywt.dwt(data_vector, 'haar', mode='zpd')
+    if len(approx) == 1:
+        return (approx, detail)
+    else:
+        return reduce_vector(approx)
+
+def calculate_wavelet_coeff(df):
+    coeff = pd.DataFrame()
+    approximations = []
+    details = []
+    for i, row in df.iterrows():
+        (approx, detail) = reduce_vector(row.tolist())
+        approximations.append(approx[0])
+        details.append(detail[0])
+
+    coeff["Approximations"] = approximations
+    coeff["Details"] = details
+
+    return coeff
+
+def wavelet(scaled_city, crime_attributes):
+    wavelet_df = calculate_wavelet_coeff(scaled_city)
+    wavelet_df = pd.concat([wavelet_df, crime_attributes[['Bin']]], axis = 1)
+    
+    return wavelet_df
+
+def infographic(df, crime_start):
+    gdf = gpd.read_file("./Data Analysis/shapefiles/States_shapefile.shp")
+    gdf.drop(gdf.index[gdf["State_Name"] == "ALASKA"], inplace=True)
+    gdf.drop(gdf.index[gdf["State_Name"] == "HAWAII"], inplace=True)
+    
+    state_totals = pd.DataFrame()
+    state_names = []
+    totals = []
+    
+    for name, group in df.groupby("STATE"):
+        state_names.append(name.upper())
+        total = group.iloc[:, range(crime_start, len(df.columns))].sum(axis=1) # totals in each city
+        total = total.sum() # add up totals in each city
+        totals.append(total)
+    
+    state_totals["State_Name"] = state_names
+    state_totals["TOTAL"] = totals
+    
+    gdf = pd.merge(gdf, state_totals, on="State_Name")
+    
+    color = "YlOrRd"  
+    fig, (state_plot, states) = plt.subplots(1, 2, figsize=(15, 5))
+    
+    gdf.apply(lambda x: states.annotate(text=x["State_Name"], xy=x.geometry.centroid.coords[0], ha='center', fontsize=6, color='grey'),axis=1)
+    norm = plt_colors.Normalize(vmin=gdf['TOTAL'].min(), vmax=gdf['TOTAL'].max())
+    cbar = plt.cm.ScalarMappable(norm=norm, cmap=color)
+    cax = fig.colorbar(cbar, fraction=0.05, pad=0.06)
+    cax.set_label("Low to High Crime", loc="center")
+    gdf.plot(column='TOTAL', cmap=color, ax=states)
+    
+    # Showcasing how total crime varies with total population in Californa
+    state_df = df.loc[df['STATE'] == "California"]
+    state_df["Total"] = state_df.iloc[:, range(crime_start, len(state_df.columns))].sum(axis=1)
+    
+    average_attr = []
+    average_total = []
+    for name, group in state_df.groupby("CITY"):
+        attr = group["Carpooled"].mean()
+        total = group.iloc[:, range(crime_start, len(df.columns))].sum(axis=1) 
+        total = total.mean()
+        
+        average_attr.append(attr)
+        average_total.append(total)
+    
+    bar_df = pd.DataFrame()
+    bar_df["Attr"] = average_attr
+    bar_df["Total"] = average_total
+    
+    bin_names = ["<25%", "25-50%", "50-75%", "75-100%"]
+    bar_df["Bin"] = pd.qcut(bar_df["Attr"], [0, .25, .5, .75, 1], labels=bin_names)
+    heights = []
+    for name, group in bar_df.groupby("Bin"):
+        heights.append(group["Total"].mean())
+    
+    state_plot.bar(bin_names, heights)
+    plt.show()
 
 if(__name__ == "__main__"):
     df = data_clean()
@@ -131,5 +221,11 @@ if(__name__ == "__main__"):
     crime_attributes["Total"] = crime_attributes.iloc[:, range(len(crime_attributes.columns))].sum(axis=1) # Exclude approximations from total
     crime_attributes["Bin"] = pd.qcut(crime_attributes["Total"], [0, .33, .66, 1], labels=bin_names) # [0, 3000, 10000, np.inf]
     
-    pc_df = principal_components(scaled_city, crime_attributes, stats, bin_names, colors)
+    pc_df = principal_components(city_attributes, scaled_city, crime_attributes, stats) # need city attributes for debug purposes
+    
     plot_reduced(pc_df, bin_names, colors, ["pc 1", "pc 2"])  # So for each row the city attribs can now be reduced down to just these two components. Plotting each city according to these two components in this new basis(Years has no effect, so essentilly plotting the same cities at different years). Not using the city names to identify each point instead binning crime in each city and color coding to see if there are clusters of cities with similar crime. For ex. L.A, 12000(tot pop), 5000(# males), High -> L.A, -2, -3, High. Point at -2, -3 is identified by high crime instead of city name
+    
+    # wavelet_df = wavelet(scaled_city, crime_attributes)
+    # plot_reduced(wavelet_df, bin_names, colors, ["Approximations", "Details"])
+    
+    infographic(df, crime_start)
