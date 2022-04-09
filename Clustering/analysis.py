@@ -29,29 +29,26 @@ def data_clean():
 
 def main():
     df = data_clean()
-    # min_max_scaler = preprocessing.MinMaxScaler()
-    
-    # scaled_df = pd.DataFrame(min_max_scaler.fit_transform(df.loc[:, ~df.columns.isin(['STATE', 'YEAR', 'CITY'])]))
-    
-    # df = pd.concat([scaled_df, df['STATE'], df['YEAR'], df['CITY']], axis = 1)
-    
-    # print(df)
-    
-    col_start = len(df.columns)
     
     crime_start = df.columns.get_loc("aggravated-assault")
-    crime_df = df.iloc[:, range(crime_start, len(df.columns))].reset_index(drop=True)
+    crime_end = crime_start + 11 # Num crime attributes
+    
+    crime_df = df.iloc[:, range(crime_start, len(df.columns))]
     
     min_max_scaler = preprocessing.MinMaxScaler()
-    df = df.join(pd.DataFrame(min_max_scaler.fit_transform(crime_df)))
+    crime_df = pd.DataFrame(min_max_scaler.fit_transform(crime_df))
+    
+    df.reset_index(drop=True, inplace=True)
+    df = df.join(crime_df)
     
     print(df)
     
     data = [item for (idx, item) in df.iterrows()]
-    k = 2
-    columns = range(col_start, len(data[0]))
     
-    centers = lloyds(data, k, columns, n=2) # Cols skip STATE, YEAR, CITY
+    k = 3
+    columns = range(0, 11) # Scaled crime attributes 0-10
+    
+    centers = lloyds(data, k, columns, n=50) 
     clusters = determine_cluster(data, centers, k, columns)
      
     
@@ -62,17 +59,30 @@ def main():
         elems["Color"] = colors[i]
         cluster_df = cluster_df.append(elems)
     
-    print(cluster_df)
-    pca = pca = PCA(n_components=len(cluster_df.columns) - 4) # Exclude non-numerical data
+    pca = PCA(n_components=len(crime_df.columns)) 
 
-    pcs = pca.fit_transform(cluster_df.loc[:, ~cluster_df.columns.isin(['STATE', 'YEAR', 'CITY', 'Color'])])
+    pcs = pca.fit_transform(crime_df)
     
     pc_df = pd.DataFrame(data = pcs[:, 0:2], columns = ['pc 1', 'pc 2'])
     pc_df = pd.concat([pc_df, cluster_df[['Color']]], axis = 1)
     print(pc_df)
-    pc_df.dropna(inplace=True)
+    
     plot_reduced(pc_df, colors, ["pc 1", "pc 2"], "PCA")
     
+    cluster_df["Total Crimes"] = cluster_df.iloc[:, range(crime_start, crime_end)].sum(axis=1)
+    
+    print(cluster_df)
+    
+    for i, row in cluster_df.iterrows():
+        if row["Gini Index"] > 1:
+            cluster_df.drop(i, inplace=True)
+            
+    plot_all_city_clusters(cluster_df, colors, crime_start)
+
+    
+def plot_cluster_city(cluster_df, city_attrib):
+    plt.scatter(cluster_df[city_attrib], cluster_df["Total Crimes"], c=cluster_df["Color"])
+    plt.show()
     
 def plot_reduced(df, colors, col_names, title):
     for color in colors:
@@ -84,6 +94,57 @@ def plot_reduced(df, colors, col_names, title):
     plt.title(title)
     plt.xlabel(col_names[0])
     plt.ylabel(col_names[1])
+    plt.show()
+    
+def get_city_cluster(cluster_df, color, crime_start):
+    cluster = cluster_df.loc[cluster_df['Color'] == color]
+    cluster = cluster.iloc[:, range(3, crime_start)] # Skip State, Year, City and get all city attribs until crime attribs
+    
+    city_attribs = {}
+    for (i, name) in enumerate(cluster):
+        city_attribs[name] = cluster[name].mean()
+        
+    return city_attribs
+
+def get_city_attribs_diffs(city_cluster_data): # [{attrib1: val}, {attrib1: val}, ..] list of city data belonging to each cluster
+    average_diff = 0
+    city_attribs_diffs = {}
+    for key in city_cluster_data[0].keys():
+        attrib_diff = city_cluster_data[0][key]
+        avg = 0
+        for city in range(1, len(city_cluster_data) + 1): # cycle around and calculate diffs attrib 1 - attrib 2, attr 2 - attr 3, etc.
+            city %= len(city_cluster_data)
+            val = city_cluster_data[city][key]
+            attrib_diff = abs(attrib_diff - val)
+            avg += attrib_diff
+            attrib_diff = val
+        
+        avg = (avg / len(city_cluster_data[0]))
+        average_diff += avg
+        city_attribs_diffs[key] = avg
+    
+    return average_diff / len(city_cluster_data[0].keys()), city_attribs_diffs
+
+def get_best_city_attribs(city_cluster_data):
+    average_diff, city_attribs_diffs = get_city_attribs_diffs(city_cluster_data)
+    attribs = []
+    for attrib in city_attribs_diffs:
+        if city_attribs_diffs[attrib] > average_diff:
+            attribs.append(attrib)
+    return attribs
+        
+def plot_all_city_clusters(cluster_df, colors, crime_start):
+    fig, axs = plt.subplots(1, 1, figsize=(9, 3), sharey=True)
+    
+    city_cluster_data = []
+    for i in range(len(colors)):
+        city_cluster_data.append(get_city_cluster(cluster_df, colors[i], crime_start))
+    
+    attribs = get_best_city_attribs(city_cluster_data)
+    for i in range(len(colors)):
+        values = [city_cluster_data[i][attrib] for attrib in attribs]
+        axs.bar(attribs, values, color=colors[i])
+        
     plt.show()
 
 if __name__ == "__main__":
