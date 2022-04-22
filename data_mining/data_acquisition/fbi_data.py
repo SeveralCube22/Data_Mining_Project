@@ -5,7 +5,7 @@ import requests
 
 def get_crime_data():
     sensitive = get_keys()
-    file = open("./Data Acquisition/city_data.csv", "r")
+    file = open("./data_mining/data_acquisition/city_data.csv", "r")
     init = False
     codes = {}
     lines = []
@@ -70,7 +70,7 @@ def get_crime_data():
                 print(year)
             except: # if FBI has no data for this city, skip
                 continue
-    file = open("./Data Acquisition/data.csv", "w")
+    file = open("./data_mining/data_acquisition/city_data.csv", "w")
     file.write(header)
     for line in lines:
         file.write(line)

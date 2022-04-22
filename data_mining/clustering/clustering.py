@@ -7,29 +7,21 @@ def lloyds(data, k, columns, centers=None, n=None, eps=None):
     if centers == None:
         centers = random.sample(list(data), k)
     
-    for i in range(k):
-        centers[i] = [centers[i][c] for c in columns]
+        for i in range(k):
+            centers[i] = [centers[i][c] for c in columns]
     
     curr_iter = 0
     curr_eps = 0
 
-    clusters = [[] for i in range(0, k)]
     if n == None:
         n = math.inf
     if eps == None:
         eps = -math.inf
         
-    while curr_iter < n and curr_eps > eps:
+    while curr_iter < n and curr_eps >= eps:
+        print(curr_iter, curr_eps)
         # Assign data points based on centers
-        for elem in data:
-            min = math.inf
-            index = -1
-            for j in range(0, k):
-                dist = distance(centers[j], elem, columns)
-                if dist < min:
-                    min = dist
-                    index = j
-            clusters[index].append(elem)
+        clusters = determine_cluster(data, centers, k, columns)
         
         # Compute new centers
         avg_dist = 0
@@ -43,13 +35,26 @@ def lloyds(data, k, columns, centers=None, n=None, eps=None):
     
     return centers
     
+    
+def determine_cluster(data, centers, k, columns):
+    clusters = [[] for i in range(0, k)]
+    for elem in data:
+            min = math.inf
+            index = -1
+            for j in range(0, k):
+                dist = distance(centers[j], elem, columns)
+                if dist < min:
+                    min = dist
+                    index = j
+            clusters[index].append(elem)
+    return clusters
 
 def distance(center, instance, columns):
     instance_data = [instance[c] for c in columns]
    
     center_data = np.array(center)
     instance_data = np.array(instance_data)
-    
+
     return np.sqrt(np.sum(np.power(center_data - instance_data, 2)))
 
 def average(cluster, columns):

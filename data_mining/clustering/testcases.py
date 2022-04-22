@@ -206,6 +206,7 @@ def test_menu(df, steps, tests, function):
 def main(auto=False, all=False, steps=[]):
     df = pandas.read_csv("./Clustering/testdata.csv")
     data = [item for (idx,item) in df.iterrows()]
+    print(data)
     if auto:
         for i,t in enumerate(LLOYD_TESTS):
             lloyds_testcase(data, i, False)

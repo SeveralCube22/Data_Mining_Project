@@ -1,3 +1,5 @@
+from cmath import isnan
+from tkinter import font
 from matplotlib.cm import ScalarMappable
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -11,7 +13,7 @@ import matplotlib.colors as plt_colors
 
 def data_clean():
     # Some attributes have null values, since the range are values > 0, the null values will become -1.
-    df = pd.read_csv("./Data Acquisition/data.csv", sep=",", encoding="latin1")
+    df = pd.read_csv("./data_mining/data_acquisition/data.csv", sep=",", encoding="latin1")
     df.columns = df.columns.str.strip()
 
     for rowI, row in df.iterrows(): #iterate over rows
@@ -30,7 +32,10 @@ def data_clean():
 
     df.dropna(inplace=True)
     df.drop("human-trafficing", 1, inplace=True) # mean and std are 0
-    return df    
+    for i, row in df.iterrows():
+        if row["Gini Index"] > 1:
+            df.drop(i, inplace=True)
+    return df 
 
 def populate_summary_statistics(df, statistics):
     crime_start = df.columns.get_loc("aggravated-assault")
@@ -76,13 +81,14 @@ def plot_stats(year_statistics):
     plt.legend()
     plt.show()  
     
-def plot_reduced(df, bin_names, colors, col_names):
+def plot_reduced(df, bin_names, colors, col_names, title):
     for bin, color in zip(bin_names, colors):
         indicesToKeep = df['Bin'] == bin
         plt.scatter(df.loc[indicesToKeep, col_names[0]],
                     df.loc[indicesToKeep, col_names[1]],
                     c = color,
                     s = 40)
+    plt.title(title)
     plt.xlabel(col_names[0])
     plt.ylabel(col_names[1])
     plt.legend(bin_names)  
@@ -183,7 +189,7 @@ def infographic(df, crime_start):
     average_attr = []
     average_total = []
     for name, group in state_df.groupby("CITY"):
-        attr = group["Carpooled"].mean()
+        attr = group["Gini Index"].mean()
         total = group.iloc[:, range(crime_start, len(df.columns))].sum(axis=1) 
         total = total.mean()
         
@@ -194,14 +200,70 @@ def infographic(df, crime_start):
     bar_df["Attr"] = average_attr
     bar_df["Total"] = average_total
     
-    bin_names = ["<25%", "25-50%", "50-75%", "75-100%"]
-    bar_df["Bin"] = pd.qcut(bar_df["Attr"], [0, .25, .5, .75, 1], labels=bin_names)
+    bar_df["Bin"] = pd.cut(bar_df["Attr"], bins=6)
+    bin_names = []
     heights = []
     for name, group in bar_df.groupby("Bin"):
-        heights.append(group["Total"].mean())
+        mean = group["Total"].mean()
+        if not isnan(mean):
+            heights.append(group["Total"].mean())
+            bin_names.append(str(name))
+    
+    state_plot.set_title("Gini Index vs Crime in California")
+    state_plot.set_xlabel("Gini Index Bins")
+    state_plot.set_ylabel("Average Crime Totals")
     
     state_plot.bar(bin_names, heights)
     plt.show()
+    
+def visualize(df, crime_start, bin_names, colors):
+    attributes = pd.DataFrame()
+    
+    tot_pop = []
+    households = []
+    tot_crime = []
+    for name, group in df.groupby("CITY"):
+        tot_pop.append(group["Total Population"].mean())
+        households.append(group["Households"].mean())
+        crime = group.iloc[:, range(crime_start, len(df.columns))].sum(axis=1)
+        tot_crime.append(crime.mean())
+        
+    attributes["Total Population"] = tot_pop
+    attributes["Households"] = households
+    attributes["Total Crime"] = tot_crime
+    attributes["Bin"] = pd.qcut(attributes["Total Crime"], [0, .33, .66, 1], labels=bin_names)
+    
+    columns = ["Median", "Mean", "STD"]
+    rows = ["Total Population", "Households", "Total Crime"]
+    
+    values = []
+    for row in rows:
+        row_val = []
+        for col in columns:
+            if col == "Median":
+                val = attributes[row].median()
+            elif col == "Mean":
+                val = attributes[row].mean()
+            elif col == "STD":
+                
+                val = attributes[row].std()
+            else:
+                val = "-"
+            row_val.append(val)
+        values.append(row_val)
+    
+    fig, (table, scatter) = plt.subplots(2)
+    fig.patch.set_visible(False)
+    table.axis('off')
+    table.axis('tight')
+    
+    table.table(cellText=values, rowLabels=rows, colLabels=columns, loc="center")
+    fig.tight_layout()
+    
+    print(attributes)
+    attributes.drop("Total Crime", inplace=True, axis=1) # dropping to plot
+    plot_reduced(attributes, bin_names, colors, ["Total Population", "Households"], "Total Population vs. Households")
+    plt.show()    
 
 if(__name__ == "__main__"):
     df = data_clean()
@@ -219,13 +281,14 @@ if(__name__ == "__main__"):
     colors = ["lightcoral", "blue", "red"]
     
     crime_attributes["Total"] = crime_attributes.iloc[:, range(len(crime_attributes.columns))].sum(axis=1) # Exclude approximations from total
-    crime_attributes["Bin"] = pd.qcut(crime_attributes["Total"], [0, .33, .66, 1], labels=bin_names) # [0, 3000, 10000, np.inf]
+    crime_attributes["Bin"] = pd.qcut(crime_attributes["Total"], [0, .33, .66, 1], labels=bin_names) 
     
     pc_df = principal_components(city_attributes, scaled_city, crime_attributes, stats) # need city attributes for debug purposes
     
-    plot_reduced(pc_df, bin_names, colors, ["pc 1", "pc 2"])  # So for each row the city attribs can now be reduced down to just these two components. Plotting each city according to these two components in this new basis(Years has no effect, so essentilly plotting the same cities at different years). Not using the city names to identify each point instead binning crime in each city and color coding to see if there are clusters of cities with similar crime. For ex. L.A, 12000(tot pop), 5000(# males), High -> L.A, -2, -3, High. Point at -2, -3 is identified by high crime instead of city name
+    plot_reduced(pc_df, bin_names, colors, ["pc 1", "pc 2"], "Principal Components")  # So for each row the city attribs can now be reduced down to just these two components. Plotting each city according to these two components in this new basis(Years has no effect, so essentilly plotting the same cities at different years). Not using the city names to identify each point instead binning crime in each city and color coding to see if there are clusters of cities with similar crime. For ex. L.A, 12000(tot pop), 5000(# males), High -> L.A, -2, -3, High. Point at -2, -3 is identified by high crime instead of city name
     
     # wavelet_df = wavelet(scaled_city, crime_attributes)
     # plot_reduced(wavelet_df, bin_names, colors, ["Approximations", "Details"])
     
     infographic(df, crime_start)
+    visualize(df, crime_start, bin_names, colors)

@@ -84,7 +84,7 @@ def select_properties():
     wait_for_element("//*[@id='geoItemsPagerContainer']")
 
 def store_table_link(year, state, url):
-    fileName = "./Data Acquisition/table_links.csv"
+    fileName = "./data_mining/data_acquisition/table_links.csv"
     if(not os.path.exists(fileName)):
         file = open(fileName, "a")
         file.write("YEAR, STATE, URL\n")
@@ -162,7 +162,7 @@ def get_city_data(rows=None):
                         for key, value in city.items():
                             cities[key] = value
 
-                    file = open("./Data Acquisition/city_data.csv", 'a')
+                    file = open("./data_mining/data_acquisition/city_data.csv", 'a')
                     for city, attrib in cities.items():
                         city = city.replace(", {}".format(stateName), "")
                         line = "{}, {}, {}, ".format(stateName, 2019 - yearI, city)
