@@ -3,13 +3,14 @@ from itertools import chain, combinations
 
 from numpy import fromregex
 
-def apriori(itemsets, threshold, constraints=None):
+def apriori(itemsets, threshold, constraints=None, exclude=None):
     curr_itemset = set()
     for itemset in itemsets:
         for item in itemset:
-            temp = set()
-            temp.add(item)
-            curr_itemset.add(frozenset(temp)) # init itemset with k = 1
+            if item not in exclude:
+                temp = set()
+                temp.add(item)
+                curr_itemset.add(frozenset(temp)) # init itemset with k = 1
     
     k = 2
     prev_itemset, prev_supports = None, None
@@ -35,15 +36,15 @@ def join(prev_lk, k, constraints):
     
     for i, item in enumerate(prev_lk):
         for pot in prev_lk[i+1:]:
-            intersection = item.intersection(pot)
-            if len(intersection) >= k - 2:
-                if constraints != None and len(intersection) > 0:
+            if len(item.intersection(pot)) >= k - 2:
+                union = item.union(pot)
+                if constraints != None:
                     for c in constraints:
-                        if c in intersection:
-                            lk.add(item.union(pot))
+                        if c in union:
+                            lk.add(union)
                             break
                 else:
-                    lk.add(item.union(pot))
+                    lk.add(union)
     return lk
 
 def prune(itemsets, threshold, pot_sets):
