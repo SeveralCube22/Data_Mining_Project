@@ -1,3 +1,4 @@
+from ast import pattern
 from copyreg import remove_extension
 from distutils.command.clean import clean
 import enum
@@ -15,21 +16,47 @@ def main():
     
     crime_start = df.columns.get_loc("aggravated-assault")
     crime_attributes = df.iloc[:, range(crime_start, len(df.columns))]
+    
     df["Total Crime"] =  crime_attributes.iloc[:, range(len(crime_attributes.columns))].sum(axis=1)
-    df.drop(crime_attributes.columns, axis=1, inplace=True) # drop all crime attributes except total crime
+    total_df = df
+    total_df = df.drop(crime_attributes.columns, axis=1) # drop all crime attributes except total crime
     
-    df = create_binned_df(df)
-    print(df)
+    total_df = create_binned_df(total_df)
+    print(total_df)
+    print(total_df["Total Crime"].value_counts())
     
-    data = [to_set(item) for (_,item) in df.iterrows()]
-    freq_itemsets = patterns.apriori(data, .3, constraints=["Total Crime Low", "Total Crime Medium", "Total Crime High"], exclude={"NULL"})
+    categories = list(total_df["Total Crime"].cat.categories)
+    pattern_mine(total_df, "Total Crime", .18, "kulczynski", .5, constraints=categories, exclude={"NULL"}, consequents=categories)
+    
+    categories = ["Total Crime Low"]
+    pattern_mine(total_df, "Total Crime Low", .14, "kulczynski", .4, constraints=categories, exclude={"NULL"}, consequents=categories)
+    
+    categories = ["Total Crime Medium"]
+    pattern_mine(total_df, "Total Crime Medium", .14, "kulczynski", .4, constraints=categories, exclude={"NULL"}, consequents=categories)
    
-    print("-----Freq Itemsets-----")
-    testcases.show_itemsets(freq_itemsets)
-    rules = patterns.association_rules(data, freq_itemsets, "cosine", .3)
-    print("-----RULES-----")
-    testcases.show_rules(rules)
+    all_crime_df = df.drop("Total Crime", axis=1)
+    all_crime_df = create_binned_df(all_crime_df)
     
+    categories = []
+    for crime in crime_attributes.columns:
+        categories += list(all_crime_df[crime].cat.categories)
+        
+    categories = [cat for cat in categories if cat != "NULL"]
+    
+    pattern_mine(all_crime_df, "ALL Crime", .2, "cosine", .5, constraints=categories, exclude={"NULL"}, consequents=categories)
+    
+ 
+ 
+def pattern_mine(df, title, support, metric, metric_threshold, constraints=None, exclude=None, antecedents=None, consequents=None):
+    data = [to_set(item) for _, item in df.iterrows()]
+    freq_itemsets = patterns.apriori(data, support, constraints=constraints, exclude=exclude)
+    
+    print("-----Freq Itemsets {}-----".format(title))
+    testcases.show_itemsets(freq_itemsets)
+    rules = patterns.association_rules(data, freq_itemsets, metric, metric_threshold, antecedents=None, consequents=consequents)
+    print("-----RULES {}-----".format(title))
+    testcases.show_rules(rules)
+       
 def create_binned_df(df):
     exclude_cols = ["STATE", "YEAR", "CITY"]
     df = df.drop(exclude_cols, axis=1)
@@ -40,7 +67,7 @@ def create_binned_df(df):
     for col_name, _ in df.iteritems():
         col_labels = ["NULL"] + [col_name + " " + label for label in labels]
         
-        quantiles = df[col_name].quantile([0.25, .5, 0.75])
+        quantiles = df[col_name].quantile([0.33, .66, 1])
         cleaned_q = []
         
         remove_label = 1 # start at LOW
@@ -61,8 +88,8 @@ def create_binned_df(df):
             if i < len(cleaned_q) - 1 and q == cleaned_q[i + 1]:
                 cleaned_q[i + 1] = q + 1
                 
-        binned_df[col_name] = pd.cut(df[col_name], bins=cleaned_q, labels=col_labels, include_lowest=True)
-        binned_df[col_name].fillna(col_labels[-1], inplace=True)
+        binned_df[col_name] = pd.cut(df[col_name], bins=cleaned_q, labels=col_labels)
+        binned_df[col_name].fillna(col_labels[0], inplace=True)
     
     return binned_df
 

@@ -7,9 +7,10 @@ def apriori(itemsets, threshold, constraints=None, exclude=None):
     curr_itemset = set()
     for itemset in itemsets:
         for item in itemset:
-            if item not in exclude:
-                temp = set()
-                temp.add(item)
+            temp = set()
+            temp.add(item)
+            
+            if exclude != None and item not in exclude or exclude == None:
                 curr_itemset.add(frozenset(temp)) # init itemset with k = 1
     
     k = 2
@@ -39,10 +40,12 @@ def join(prev_lk, k, constraints):
             if len(item.intersection(pot)) >= k - 2:
                 union = item.union(pot)
                 if constraints != None:
+                    count = 0
                     for c in constraints:
                         if c in union:
-                            lk.add(union)
-                            break
+                            count += 1
+                    if count == 1:
+                        lk.add(union)
                 else:
                     lk.add(union)
     return lk
@@ -57,7 +60,7 @@ def prune(itemsets, threshold, pot_sets):
             supports.append(support)
     return lk, supports
     
-def association_rules(itemsets, frequent_itemsets, metric, metric_threshold):
+def association_rules(itemsets, frequent_itemsets, metric, metric_threshold, antecedents=None, consequents=None):
     rules = []
 
     for itemset in frequent_itemsets:
@@ -65,8 +68,16 @@ def association_rules(itemsets, frequent_itemsets, metric, metric_threshold):
         for A in sets:
             A = frozenset(A)
             B = itemset[0].difference(A)
-            if len(A) == 0 or len(B) == 0:
+            
+            if (len(A) == 0 or len(B) == 0):
                 continue
+            
+            if antecedents != None and not check_if_contains(A, antecedents):
+                continue
+            
+            if consequents != None and not check_if_contains(B, consequents):
+                continue
+                        
             
             metric_val = None
             if metric.lower() == "lift":
@@ -92,6 +103,12 @@ def association_rules(itemsets, frequent_itemsets, metric, metric_threshold):
 def powerset(set):
     s = list(set)
     return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
+
+def check_if_contains(items, constraint):
+    for i in items:
+        if i not in constraint:
+            return False
+    return True
 
 def support_count(itemsets, item):
     count = 0
