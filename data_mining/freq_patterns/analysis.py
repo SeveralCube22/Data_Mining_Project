@@ -44,9 +44,7 @@ def main():
     categories = [cat for cat in categories if cat != "NULL"]
     
     pattern_mine(all_crime_df, "ALL Crime", .2, "cosine", .5, constraints=categories, exclude={"NULL"}, consequents=categories)
-    
- 
- 
+
 def pattern_mine(df, title, support, metric, metric_threshold, constraints=None, exclude=None, antecedents=None, consequents=None):
     data = [to_set(item) for _, item in df.iterrows()]
     freq_itemsets = patterns.apriori(data, support, constraints=constraints, exclude=exclude)

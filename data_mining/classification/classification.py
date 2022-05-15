@@ -7,21 +7,26 @@ import math
 # trouble getting started, this might be a good starting point
 
 # Create the decision tree recursively
-def make_node(previous_ys, xs, ys, columns):
+def make_node(previous_ys, xs, ys, columns, curr_depth, max_depth=None):
     # WARNING: lists are passed by reference in python
     # If you are planning to remove items, it's better 
     # to create a copy first
     columns = columns[:]
     # First, check the three termination criteria:
     
-    if(len(xs) == 0 and len(ys) == 0):
+    if len(xs) == 0 and len(ys) == 0:
         return {"type": "class", "class": majority(previous_ys)}
     
-    if(same(ys)):
+    if same(ys):
         return {"type": "class", "class": ys[0]}
 
-    if(len(columns) == 0):
+    if len(columns) == 0:
         return {"type": "class", "class": majority(ys)}
+    
+    if max_depth != None and curr_depth + 1 >= max_depth:
+        if len(ys) == 0: mys = majority(previous_ys)
+        else: mys = majority(ys)
+        return {"type": "class", "class": mys}
     
     # Otherwise:
     # Compute the entropy of the current ys 
@@ -63,9 +68,9 @@ def make_node(previous_ys, xs, ys, columns):
     
     children = {}
     for piece in max_split:
-        children[piece] = make_node(ys, max_split[piece][0], max_split[piece][1], columns)
+        children[piece] = make_node(ys, max_split[piece][0], max_split[piece][1], columns, curr_depth + 1, max_depth=max_depth)
           
-    return {"type": "split", "split": remove_col, "children": children}
+    return {"type": "split", "split": remove_col, "majority": majority(ys), "children": children}
 
 
 def split_dataset(xs, ys, c):
@@ -126,11 +131,11 @@ class DecisionTree:
         self.tree = tree
     
     # DO NOT CHANGE THE FOLLOWING LINE    
-    def fit(self, x, y):
+    def fit(self, x, y, max_depth=None):
     # INEDO NOT CHANGE THE PRECEDING L
     
         self.majority = majority(y)
-        self.tree = make_node(y, x, y, list(range(len(x[0]))))
+        self.tree = make_node(y, x, y, list(range(len(x[0]))), 0, max_depth)
     
     def classify(self, current_node, x):
         if current_node["type"] == "class":
@@ -149,6 +154,94 @@ class DecisionTree:
 
         return [self.classify(self.tree, instance) for instance in x]
     
+    def prune(self, ys, num_leaves_to_prune):
+        self.init_node_errors(self.tree)
+        self.classify_validation_data(ys)
+        twigs = []
+        self.collect_twigs(self.tree, twigs)
+        
+        get_twig_error = lambda node: node['Node Error']
+        twigs = sorted(twigs, key=get_twig_error, reverse=True)
+        
+        num_leaves_pruned = 0
+        while True:
+            if num_leaves_pruned >= num_leaves_to_prune:
+                break
+            else:
+                if len(twigs) == 0:
+                    twigs = []
+                    self.collect_twigs(self.tree, twigs)
+                    twigs = sorted(twigs, key=get_twig_error, reverse=True)
+                    
+                    if len(twigs) == 0:
+                        break # No more twigs
+                else:
+                    twig = twigs.pop(0)
+                    twig["type"] = "class"
+                    twig["class"] = twig["majority"]
+                    num_leaves_pruned += len(twig["children"])
+                    num_leaves_pruned -= 1 # adding back in the twig
+                    del twig["children"]
+                    del twig["split"]
+        
+    def calculate_height(self, node):
+        if node["type"] == "class":
+            return 1
+        else:
+            heights = []
+            for child in node["children"]:
+                heights.append(1 + self.calculate_height(node["children"][child]))    
+            return max(heights)
+        
+    def init_node_errors(self, node):
+        node["Node Error"] = 0
+        if node["type"] == "split":
+            for child in node["children"]:
+                self.init_node_errors(node["children"][child])
+
+    def is_twig(self, node):
+        if node["type"] == "split":
+            for child in node["children"]:
+                if node["children"][child]["type"] == "split":
+                    return False
+            return True
+        return False
+    
+    def count_leaves(self, node):
+        if node["type"] == "class":
+            return 1
+        else:
+            n = 0
+            for child in node["children"]:
+                n += self.count_leaves(node["children"][child])
+            return n 
+            
+    def collect_twigs(self, node, twigs):
+        if(self.is_twig(node)):
+            twig_error = node["Node Error"]
+            for child in node["children"]:
+                twig_error -= (node["children"][child]["Node Error"]) # twig error if this twig became a leaf instead
+            node["Node Error"] = twig_error
+            twigs.append(node)
+        else:
+            if node["type"] == "split":
+                for child in node["children"]:
+                    self.collect_twigs(node["children"][child], twigs)
+        
+    def classify_validation_data(self, ys):
+        for y in ys:
+            self.classify_validation_instance(self.tree, y)
+            
+    def classify_validation_instance(self, node, y):
+        if node["type"] == "split":
+            if node["majority"] != y:
+                node["Node Error"] += 1
+            for child in node["children"]:
+                self.classify_validation_instance(node["children"][child], y)
+        else:
+            if node["class"] != y:
+                node["Node Error"] += 1
+     
     # DO NOT CHANGE THE FOLLOWING LINE
     def to_dict(self):
     # DO NOT CHANGE THE PRECEDING LINE
